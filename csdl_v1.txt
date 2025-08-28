@@ -1,0 +1,612 @@
+drop database lvtn_book;
+CREATE DATABASE IF NOT EXISTS lvtn_book;
+USE lvtn_book;
+
+-- Bảng người dùng
+CREATE TABLE users (
+  user_id INT AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(100) NOT NULL UNIQUE,
+  password VARCHAR(255) NOT NULL,
+  role ENUM('admin', 'customer') DEFAULT 'customer',
+  name VARCHAR(100),
+  avt VARCHAR(255) default 'data_image/avatar/default.jpg',
+  phone VARCHAR(20),
+  address TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  reset_token VARCHAR(255),
+  reset_token_expiry DATETIME,
+  is_deleted BOOLEAN DEFAULT 0
+);
+
+-- Tác giả
+CREATE TABLE authors (
+  author_id INT AUTO_INCREMENT PRIMARY KEY,
+  img_url VARCHAR(255),
+  name VARCHAR(100) NOT NULL,
+  book_count INT DEFAULT 0,
+  nationality VARCHAR(50),
+  bio TEXT,
+  is_deleted BOOLEAN DEFAULT 0
+);
+
+-- Nhà xuất bản
+CREATE TABLE publishers (
+  publisher_id INT AUTO_INCREMENT PRIMARY KEY,
+  logo_url VARCHAR(255),
+  name VARCHAR(100) NOT NULL,
+  book_count INT DEFAULT 0,
+  is_deleted BOOLEAN DEFAULT 0
+);
+
+-- Thể loại
+CREATE TABLE categories (
+  category_id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  book_count INT DEFAULT 0,
+  is_deleted BOOLEAN DEFAULT 0
+);
+
+-- Sách
+CREATE TABLE books (
+  book_id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  price_in decimal(10,2),
+  price_out DECIMAL(10,2),
+  price_discount DECIMAL(10,2) default null,
+  quantity int default 0,
+  sold int default 0,
+  category_id INT,
+  publisher_id INT,
+  author_id INT,
+  rating DECIMAL(2,1) DEFAULT 3.0,
+  is_discounted boolean default 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (category_id) REFERENCES categories(category_id),
+  FOREIGN KEY (publisher_id) REFERENCES publishers(publisher_id),
+  FOREIGN KEY (author_id) REFERENCES authors(author_id),
+  is_deleted BOOLEAN DEFAULT 0
+);
+
+-- Hình ảnh sách
+CREATE TABLE book_images (
+  img_id INT AUTO_INCREMENT PRIMARY KEY,
+  book_id INT,
+  img_url VARCHAR(255),
+  is_primary BOOLEAN DEFAULT FALSE,
+  FOREIGN KEY (book_id) REFERENCES books(book_id)
+);
+
+-- Giảm giá
+CREATE TABLE discount (
+  discount_id INT AUTO_INCREMENT PRIMARY KEY,
+  book_id INT,
+  discount_percent DECIMAL(4,2) CHECK (discount_percent BETWEEN 0 AND 100),
+  start_date DATE,
+  end_date DATE,
+  FOREIGN KEY (book_id) REFERENCES books(book_id),
+  is_deleted BOOLEAN DEFAULT 0
+);
+
+-- Nhập kho sách
+CREATE TABLE added_book (
+  added_id INT AUTO_INCREMENT PRIMARY KEY,
+  book_id INT,
+  price_in DECIMAL(10,2),
+  quantity INT,
+  type ENUM('Thêm sách mới', 'Nhập thêm sách có sẵn'),
+  added_by INT default 1,
+  added_date DATE,
+  FOREIGN KEY (book_id) REFERENCES books(book_id),
+  FOREIGN KEY (added_by) REFERENCES users(user_id)
+);
+
+-- Giỏ hàng
+CREATE TABLE carts (
+  cart_id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT,
+  total_price DECIMAL(10,2) DEFAULT 0, 
+  shipping_fee DECIMAL(10,2) DEFAULT 0,
+  final_amount DECIMAL(10,2) DEFAULT 0,
+  FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+-- Chi tiết giỏ hàng
+CREATE TABLE cart_details (
+  cart_id INT,
+  book_id INT,
+  quantity INT,
+  price_out DECIMAL(10,2),
+  subtotal DECIMAL(10,2) DEFAULT 0,
+  PRIMARY KEY (cart_id, book_id),
+  FOREIGN KEY (cart_id) REFERENCES carts(cart_id),
+  FOREIGN KEY (book_id) REFERENCES books(book_id)
+);
+
+-- Đơn hàng
+CREATE TABLE orders (
+  order_id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT not null,
+  shipping_address VARCHAR(255),
+  total_price DECIMAL(10,2),
+  shipping_fee DECIMAL(10,2) DEFAULT 0,
+  final_amount DECIMAL(10,2) DEFAULT 0,
+  payment_method ENUM('COD', 'Online') DEFAULT 'COD',
+  paid_at datetime null,
+  status ENUM('Chờ duyệt', 'Đang giao', 'Đã thanh toán','Hoàn thành', 'Đã hủy') DEFAULT 'Chờ duyệt',
+  order_date DATE DEFAULT CURRENT_DATE,
+  updated_date DATE,
+  FOREIGN KEY (user_id) REFERENCES users(user_id),
+  is_deleted BOOLEAN DEFAULT 0
+);
+
+-- Chi tiết đơn hàng
+CREATE TABLE order_details (
+  order_id INT,
+  book_id INT,
+  quantity INT,
+  price_out DECIMAL(10,2),
+  subtotal DECIMAL(10,2),
+  PRIMARY KEY (order_id, book_id),
+  FOREIGN KEY (order_id) REFERENCES orders(order_id),
+  FOREIGN KEY (book_id) REFERENCES books(book_id)
+);
+-- Sách yêu thích
+CREATE TABLE favorites (
+  favorite_id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT,
+  book_id INT,
+  liked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(user_id),
+  FOREIGN KEY (book_id) REFERENCES books(book_id),
+  UNIQUE(user_id, book_id) -- Mỗi người chỉ thích 1 sách 1 lần
+);
+-- Đánh giá sách
+CREATE TABLE review (
+  review_id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT,
+  book_id INT,
+  order_id INT,
+  rating INT CHECK (rating BETWEEN 1 AND 5),
+  comment TEXT,
+  status ENUM('Chờ duyệt', 'Đã duyệt') DEFAULT 'Chờ duyệt',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(user_id),
+  FOREIGN KEY (book_id) REFERENCES books(book_id),
+  FOREIGN KEY (order_id) REFERENCES orders(order_id)
+);
+-- trò chuyện 
+CREATE TABLE messages (
+  message_id INT AUTO_INCREMENT PRIMARY KEY,
+  sender_id INT NOT NULL,
+  receiver_id INT NOT NULL,
+  content TEXT NOT NULL,
+  sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  is_read BOOLEAN DEFAULT 0,
+  FOREIGN KEY (sender_id) REFERENCES users(user_id),
+  FOREIGN KEY (receiver_id) REFERENCES users(user_id)
+);
+-- hoàn tiền --
+CREATE TABLE refunds (
+  refund_id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id INT NOT NULL,
+  user_id INT NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  refund_method ENUM('Chuyển khoản', 'MOMO', 'VNPAY') DEFAULT 'Chuyển khoản',           
+  refund_reason ENUM('Khách hàng hủy đơn','Admin hủy đơn'),
+  status ENUM('Đang chờ', 'Đã hoàn') default 'Đang chờ',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (order_id) REFERENCES orders(order_id),
+  FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+-- TRIGGER BEGIN--
+-- đếm số lượng sách--
+DELIMITER //
+CREATE TRIGGER trg_update_book_count_after_insert
+AFTER INSERT ON books
+FOR EACH ROW
+BEGIN
+  UPDATE authors
+  SET book_count = book_count + 1
+  WHERE author_id = NEW.author_id;
+
+  UPDATE publishers
+  SET book_count = book_count + 1
+  WHERE publisher_id = NEW.publisher_id;
+
+  UPDATE categories
+  SET book_count = book_count + 1
+  WHERE category_id = NEW.category_id;
+END;
+//
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_update_book_count_after_delete
+AFTER DELETE ON books
+FOR EACH ROW
+BEGIN
+  UPDATE authors
+  SET book_count = book_count - 1
+  WHERE author_id = OLD.author_id;
+
+  UPDATE publishers
+  SET book_count = book_count - 1
+  WHERE publisher_id = OLD.publisher_id;
+
+  UPDATE categories
+  SET book_count = book_count - 1
+  WHERE category_id = OLD.category_id;
+END;
+//
+DELIMITER ;
+-- đếm số lượng sách end--
+-- giá bán --
+DELIMITER //
+CREATE TRIGGER trg_set_price_out
+BEFORE INSERT ON books
+FOR EACH ROW
+BEGIN
+  SET NEW.price_out = ROUND(NEW.price_in * 1.3, 2);
+END;
+//
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_update_price_out
+BEFORE UPDATE ON books
+FOR EACH ROW
+BEGIN
+  SET NEW.price_out = ROUND(NEW.price_in * 1.3, 2);
+END;
+//
+DELIMITER ;
+-- giá bán end --
+-- tính phí ship cart--
+DELIMITER //
+CREATE TRIGGER trg_cart_shipping_fee
+BEFORE INSERT ON carts
+FOR EACH ROW
+BEGIN
+  SET NEW.shipping_fee = IF(NEW.total_price >= 500000, 0, 30000);
+  SET NEW.final_amount = NEW.total_price + NEW.shipping_fee;
+END;
+//
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_cart_shipping_fee_update
+BEFORE UPDATE ON carts
+FOR EACH ROW
+BEGIN
+  SET NEW.shipping_fee = IF(NEW.total_price >= 500000, 0, 30000);
+  SET NEW.final_amount = NEW.total_price + NEW.shipping_fee;
+END;
+//
+DELIMITER ;
+-- tính phí ship cart end--
+-- tính phí ship order--
+DELIMITER //
+CREATE TRIGGER trg_calculate_shipping_fee
+BEFORE INSERT ON orders
+FOR EACH ROW
+BEGIN
+  SET NEW.shipping_fee = IF(NEW.total_price >= 500000, 0, 30000);
+  SET NEW.final_amount = NEW.total_price + NEW.shipping_fee;
+END;
+//
+DELIMITER ;
+-- tính phí ship order end--
+-- thêm lịch sử nhập kho--
+DELIMITER //
+CREATE TRIGGER trg_insert_added_book_history
+AFTER INSERT ON books
+FOR EACH ROW
+BEGIN
+  INSERT INTO added_book (
+    book_id,
+    price_in,
+    quantity,
+    type,
+    added_by,
+    added_date
+  )
+  VALUES (
+    NEW.book_id,
+    NEW.price_in,
+    NEW.quantity,
+    'Thêm sách mới',
+    1, 
+    CURDATE()
+  );
+END;
+//
+DELIMITER ;
+-- thêm lịch sử nhập kho end--
+-- tính giá sách giảm giá--
+DELIMITER //
+CREATE TRIGGER trg_update_price_discount
+AFTER INSERT ON discount
+FOR EACH ROW
+BEGIN
+  IF NEW.is_deleted = 0 AND NEW.start_date <= CURDATE() AND NEW.end_date >= CURDATE() THEN
+    UPDATE books
+    SET price_discount = price_out * (1 - NEW.discount_percent / 100),
+        is_discounted = 1
+    WHERE book_id = NEW.book_id AND is_deleted = 0;
+  END IF;
+END;
+//
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_update_price_discount_on_change
+AFTER UPDATE ON discount
+FOR EACH ROW
+BEGIN
+  -- Chỉ cập nhật nếu không bị xóa và thời gian đang hiệu lực
+  IF NEW.is_deleted = 0 AND NEW.start_date <= CURDATE() AND NEW.end_date >= CURDATE() THEN
+    UPDATE books
+    SET price_discount = price_out * (1 - NEW.discount_percent / 100),
+        is_discounted = 1
+    WHERE book_id = NEW.book_id AND is_deleted = 0;
+  END IF;
+END;
+//
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_restore_price_on_discount_hide
+AFTER UPDATE ON discount
+FOR EACH ROW
+BEGIN
+  IF OLD.is_deleted = 0 AND NEW.is_deleted = 1 THEN
+    UPDATE books
+    SET price_discount = NULL,
+        is_discounted = 0
+    WHERE book_id = NEW.book_id AND is_deleted = 0;
+  END IF;
+END;
+//
+DELIMITER ;
+-- tính giá sách giảm giá end--
+/*-- tính tiền cho giỏ hàng --
+DELIMITER //
+CREATE TRIGGER trg_update_cart_after_insert_or_update
+AFTER INSERT ON cart_details
+FOR EACH ROW
+BEGIN
+  DECLARE total DECIMAL(10,2);
+
+  -- Tính subtotal cho dòng vừa thêm
+  UPDATE cart_details
+  SET subtotal = NEW.quantity * NEW.price_out
+  WHERE cart_id = NEW.cart_id AND book_id = NEW.book_id;
+
+  -- Tính tổng tất cả subtotal trong giỏ hàng
+  SELECT SUM(subtotal) INTO total
+  FROM cart_details
+  WHERE cart_id = NEW.cart_id;
+
+  -- Cập nhật cart: tổng tiền, phí vận chuyển, tổng cuối
+  UPDATE carts
+  SET 
+    total_price = total,
+    shipping_fee = IF(total >= 500000, 0, 30000),
+    final_amount = total + IF(total >= 500000, 0, 30000)
+  WHERE cart_id = NEW.cart_id;
+END;
+//
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_update_cart_after_quantity_change
+AFTER UPDATE ON cart_details
+FOR EACH ROW
+BEGIN
+  DECLARE total DECIMAL(10,2);
+
+  -- Cập nhật lại subtotal cho dòng vừa sửa
+  UPDATE cart_details
+  SET subtotal = NEW.quantity * NEW.price_out
+  WHERE cart_id = NEW.cart_id AND book_id = NEW.book_id;
+
+  -- Tính lại tổng subtotal của cả giỏ
+  SELECT SUM(subtotal) INTO total
+  FROM cart_details
+  WHERE cart_id = NEW.cart_id;
+
+  SET total = IFNULL(total, 0);
+
+  -- Cập nhật vào carts
+  UPDATE carts
+  SET 
+    total_price = total,
+    shipping_fee = IF(total >= 500000, 0, 30000),
+    final_amount = total + IF(total >= 500000, 0, 30000)
+  WHERE cart_id = NEW.cart_id;
+END;
+//
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_update_cart_after_delete
+AFTER DELETE ON cart_details
+FOR EACH ROW
+BEGIN
+  DECLARE total DECIMAL(10,2);
+
+  -- Tính lại tổng tiền
+  SELECT SUM(subtotal) INTO total
+  FROM cart_details
+  WHERE cart_id = OLD.cart_id;
+
+  -- Nếu không còn dòng nào → total = 0
+  SET total = IFNULL(total, 0);
+
+  -- Cập nhật cart
+  UPDATE carts
+  SET 
+    total_price = total,
+    shipping_fee = IF(total >= 500000, 0, 30000),
+    final_amount = total + IF(total >= 500000, 0, 30000)
+  WHERE cart_id = OLD.cart_id;
+END;
+//
+DELIMITER ;
+-- tính tiền cho giỏ hàng end --*/
+
+-- TRIGGER END--
+
+
+-- Thêm dữ liệu
+INSERT INTO users (email, password, role, name, avt, phone, address)
+VALUES 
+('huahungtan001@gmail.com', '123456', 'admin', 'Hứa Hùng Tấn', 'data_image/avatar/huahungtan.jpg','0947227152', 'Phú Tân, Phú Tân, Cà Mau'),
+('tanc2200011@student.ctu.edu.vn', '123456', 'customer', 'Hùng Tấn Hứa', 'data_image/avatar/hungtanhua.jpg','0352164171', 'Phú Tân, Phú Tân, Cà Mau'),
+('dlxyz1234@gmail.com', '123456', 'customer', 'Lý Phượng Minh','data_image/avatar/lyphuongminh.jpg', '0947258310', 'An Khánh, Ninh Kiều, Cần Thơ'),
+('boan697@gmail.com', '123456', 'customer', 'Võ Kim Anh', 'data_image/avatar/vokimanh.jpg','0918255774', 'Mỹ Xuyên, Long Xuyên, An Giang');
+INSERT INTO users (email, password, role, name, phone, address)
+VALUES
+('cus1test@gmail.com', '123456', 'customer', 'Nguyễn Văn Hòa','0918255775', 'Long Điền, Đông Hải, Bạc Liêu'),
+('cus2test@gmail.com', '123456', 'customer', 'Lê Hoàng Hải','0947241775', 'Phước Long, Phước Long, Bạc Liêu'),
+('cus3test@gmail.com', '123456', 'customer', 'Nguyễn Diệu Vân','0918254175', 'Đông Thạnh, Châu Thành, Hậu Giang'),
+('cus4test@gmail.com', '123456', 'customer', 'Lâm Thanh Mỹ','0947252376', 'An Đức, Ba Tri, Bến Tre'),
+('cus5test@gmail.com', '123456', 'customer', 'Nguyễn Hoàng Thịnh','0918258879', 'Thuận Hòa, Long Mỹ, Hậu Giang')
+;
+
+
+INSERT INTO authors (img_url, name, nationality, bio) 
+VALUES 
+    ('data_image/author_images/PhungQuan.jpg', 'Phùng Quán', 'Việt Nam', 'Ông là một trong những nhà văn, nhà thơ nổi bật của văn học Việt Nam, có sự nghiệp văn chương dài và đầy biến động'),
+    ('data_image/author_images/TranDangKhoa.jpg','Trần Đăng Khoa', 'Việt Nam', 'Ông là một nhà thơ nổi tiếng của Việt Nam, được biết đến với biệt danh “thần đồng thơ ca”. Ông được biết đến với những vần thơ hồn nhiên, trong sáng, thể hiện tình yêu quê hương, đất nước và những cảm xúc của tuổi thơ.'),
+    ('data_image/author_images/NguyenNhatAnh.jpg', 'Nguyễn Nhật Ánh', 'Việt Nam', 'Nhà văn Việt Nam nổi tiếng với các tác phẩm dành cho thiếu nhi và thanh thiếu niên'),
+    ('data_image/author_images/HarukiMurakami.jpg', 'Haruki Murakami', 'Nhật Bản', 'Tiểu thuyết gia người Nhật Bản, tác giả của những cuốn sách đầy chất suy tưởng và phiêu lưu'),
+    ('data_image/author_images/JKRowling.jpg','J.K. Rowling', 'Anh', 'Tác giả của bộ truyện Harry Potter, một trong những hiện tượng văn học nổi tiếng nhất thế kỷ 21'),
+    ('data_image/author_images/cacmac.jpg','Karl Marx', 'Đức', 'Nhà tư tưởng, triết học, nhà cách mạng thiên tài, tác giả nhiều bộ sách chính trị nổi tiếng'),
+    ('data_image/author_images/thachlam.jpg','Thạch Lam', 'Việt Nam', 'Một trong những nhà văn tiêu biểu của văn học lãng mạn Việt Nam'),
+    ('data_image/author_images/DaleCarnegie.jpg','Dale Carnegie', 'Mỹ', 'Nhà văn, nhà thuyết trình người Mỹ, người phát triển các lớp tự giáo dục, bán hàng, kĩ năng giao tiếp'),
+    ('data_image/author_images/Miles_Kelly_Logo.jpg','Miles Kelly', 'Anh', 'Nhóm tác giả chuyên sáng tạo các tác phẩm giáo dục khoa học'),
+    ('data_image/author_images/RichardRestak.jpg','Richard Restak ', 'Mỹ', 'Ông là một bác sĩ thần kinh học, nhà văn và giáo sư nổi tiếng người Mỹ, chuyên nghiên cứu về bộ não và trí nhớ con người'),
+    ('data_image/author_images/JRBenton.jpg','Janetta Rebold Benton','Mỹ',' Bà là một giáo sư, nhà sử học nghệ thuật và tác giả nổi tiếng người Mỹ, chuyên về nghệ thuật thời Trung Cổ và Phục Hưng'),
+    ('data_image/author_images/MichitakeAso.jpg','Michitake Aso','Mỹ','Ông là một nhà sử học môi trường toàn cầu người Mỹ, chuyên nghiên cứu về lịch sử nông nghiệp, y tế và môi trường ở Việt Nam và Pháp trong thế kỷ 19–20
+')
+    ;
+INSERT INTO publishers (logo_url,name)
+VALUES
+     ('data_image/publisher_images/nxbkimdong.jpg','NXB Kim Đồng'),
+     ('data_image/publisher_images/nxbsuthat.jpg','NXB Chính trị quốc gia Sự thật'),
+     ('data_image/publisher_images/nxbhoinhavan.jpg','NXB Hội nhà văn'),
+     ('data_image/publisher_images/nxbtre.jpg','NXB Trẻ'),
+     ('data_image/publisher_images/nxbgiaoduc.jpg','NXB Giáo dục'),
+     ('data_image/publisher_images/nxbvanhoc.jpg','NXB Văn học'),
+     ('data_image/publisher_images/nxbthegioi.jpg','NXB Thế giới'),
+     ('data_image/publisher_images/nxbtonghoptphcm.jpg','NXB Tổng hợp Thành phố Hồ Chí Minh');
+
+INSERT INTO categories (name) 
+VALUES 
+    ('Chính trị - Kinh Tế'),
+    ('Khoa học - Kỹ thuật'),
+    ('Lịch sử - Văn hóa'),
+    ('Nghệ thuật - Thiết kế'),
+    ('Tiểu thuyết'),
+    ('Sách thiếu nhi'),
+    ('Tâm lý - Kỹ năng sống'),
+    ('Sức khỏe - Dinh dưỡng');
+
+INSERT INTO books (name, description, price_in, quantity, category_id, publisher_id, author_id)
+VALUES
+ ('Tuổi thơ dữ dội (Tập 1)', 'Tác phẩm nổi tiếng của Phùng Quán, kể về tuổi thơ đầy gian khó của thiếu niên thời chiến.',120000,50, 6, 1, 1),
+ ('Tuổi thơ dữ dội (Tập 2)', 'Tập 2 của tiểu thuyết Tuổi thơ dữ dội, tác phẩm nổi tiếng của Phùng Quán, kể về tuổi thơ đầy gian khó của thiếu niên thời chiến.',120000,50, 6, 1, 1),
+ ('Rừng Na-uy', 'Tiểu thuyết nổi tiếng của Haruki Murakami, khám phá tuổi trẻ, tình yêu và sự cô đơn.',180000,50, 5, 3, 4),
+ ('Harry Potter và Hòn đá Phù thủy', 'Tác phẩm đầu tiên trong loạt truyện Harry Potter huyền thoại của J.K. Rowling.',200000,50, 5, 4, 5),
+ ('Tôi thấy hoa vàng trên cỏ xanh','Tiểu thuyết nổi tiếng của Nguyễn Nhật Ánh, kể về tuổi thơ mộng mơ và hoài niệm của những đứa trẻ miền quê Việt Nam.',95000,50,5,4,3),
+ ('Góc sân và khoảng trời','Tập thơ thiếu nhi của nhà thơ Trần Đăng Khoa', 130000,50, 6, 6, 2),
+ ('Tư bản 1','Bộ Sách Kinh Điển Tư Bản Luận - Phê Phán Khoa Kinh Tế Chính Trị là công trình khoa học kinh điển của Karl Marx (C. Mác)', 400000,20, 1, 2, 6),
+ ('Đắc nhân tâm','Một tác phẩm nổi tiếng của Dale Carnegie, không chỉ là một cẩm nang về nghệ thuật giao tiếp mà còn là chìa khóa mở ra cánh cửa thành công trong cuộc sống và công việc', 120000,50, 7, 6, 8),
+ ('Hà Nội 36 phố phường','Cuốn sách mỏng, xinh xắn nhưng cho đến nay, khi người ta nói đến Hà Nội và những tác phẩm thể hiện được tinh hoa, vẻ đẹp của Hà Nội thì người ta vẫn nhắc đến Hà Nội 36 phố phường', 60000, 50, 3, 6, 7),
+ ('Hạt phù sa kì diệu','Truyện cổ tích mới âm hưởng trường ca về Thần Hạn say rượu, Thần Lụt gây mưa bão và những người dân chất phác nơi làng quê xanh mát bóng tre bên sông Kinh Thầy.', 60000,50, 6, 1, 2),
+ ('Tư bản 2','Tập 2 của bộ Sách Kinh Điển Tư Bản Luận - Phê Phán Khoa Kinh Tế Chính Trị là công trình khoa học kinh điển của Karl Marx (C. Mác)', 400000,20, 1, 2, 6),
+ ('Harry Potter và phòng chứa bí mật', 'Tác phẩm thứ hai trong loạt truyện Harry Potter huyền thoại của J.K. Rowling.',200000,50, 5, 4, 5),
+ ('Harry Potter và tên tù nhân ngục Azkaban', 'Tác phẩm thứ ba trong loạt truyện Harry Potter huyền thoại của J.K. Rowling.',200000,50, 5, 4, 5),
+ ('Harry Potter và chiếc cốc lửa', 'Tác phẩm thứ tư trong loạt truyện Harry Potter huyền thoại của J.K. Rowling.',200000,50, 5, 4, 5),
+ ('500 dữ kiện về động vật ăn thịt', 'Cuốn sách chứa đựng thông tin về thế giới động vật, cũng như cung cấp những kiến thức cơ bản nhất về vòng đời, thức ăn, sinh sản, môi trường thích nghi, tập tính săn mồi khác của chúng',100000,30,2,4,9),
+ ('Tăng cường trí nhớ, phòng bệnh Alzheimer','Tăng cường trí nhớ, phòng bệnh Alzheimer của Tiến sĩ Y khoa Richard Restak là một tác phẩm toàn diện, khám phá cách trí nhớ hoạt động và cách tối ưu hóa khả năng ghi nhớ.',80000,20,8,4,10),
+ ('Harry Potter và Hội Phượng Hoàng', 'Tác phẩm thứ năm trong loạt truyện Harry Potter huyền thoại của J.K. Rowling.',200000,50, 5, 4, 5),
+ ('Harry Potter và hoàng tử lai', 'Tác phẩm thứ sáu trong loạt truyện Harry Potter huyền thoại của J.K. Rowling.',200000,50, 5, 4, 5),
+ ('Để hiểu nghệ thuật','Cuốn "Để Hiểu Nghệ Thuật" của Janetta Rebold Benton là một hướng dẫn sinh động và dễ tiếp cận dành cho bất kỳ ai muốn khám phá thế giới nghệ thuật thị giác một cách sâu sắc hơn',240000, 30, 4,7,11),
+ ('Cây cao su ở Việt Nam dưới góc nhìn lịch sử - sinh thái (1897-1975','Cuốn sách là một công trình nghiên cứu sâu sắc, kết hợp giữa lịch sử môi trường, y tế, nông nghiệp và chính trị Việt Nam trong gần một thế kỷ',220000,35,3,8,12)
+;
+
+
+INSERT INTO book_images (book_id, img_url, is_primary)
+VALUES
+(1, 'data_image/book_images/tuoithodudoi1.jpg', true),
+(1, 'data_image/book_images/tuoithodudoi11.jpg', false),
+(1, 'data_image/book_images/tuoithodudoi12.jpg', false),
+(2, 'data_image/book_images/tuoithodudoi2.jpg', true),
+(2, 'data_image/book_images/tuoithodudoi21.jpg', false),
+(2, 'data_image/book_images/tuoithodudoi22.jpg', false),
+(3, 'data_image/book_images/rungnauy.jpg', true),
+(3, 'data_image/book_images/rungnauy1.jpg', false),
+(3, 'data_image/book_images/rungnauy2.jpg', false),
+(4, 'data_image/book_images/HPvahondaphuthuy.jpg', true),
+(4, 'data_image/book_images/HPvahondaphuthuy1.jpg', false),
+(4, 'data_image/book_images/HPvahondaphuthuy2.jpg', false),
+(5, 'data_image/book_images/toithayhoavangtrencoxanh.jpg', true),
+(5, 'data_image/book_images/toithayhoavangtrencoxanh1.jpg', false),
+(5, 'data_image/book_images/toithayhoavangtrencoxanh2.jpg', false),
+(6, 'data_image/book_images/gocsanvakhoangtroi.jpg', true),
+(6, 'data_image/book_images/gocsanvakhoangtroi1.jpg', false),
+(6, 'data_image/book_images/gocsanvakhoangtroi2.jpg', false),
+(7, 'data_image/book_images/tuban1.jpg', true),
+(7, 'data_image/book_images/tuban11.jpg', false),
+(7, 'data_image/book_images/tuban12.jpg', false),
+(8, 'data_image/book_images/dacnhantam.jpg', true),
+(8, 'data_image/book_images/dacnhantam1.jpg', false),
+(8, 'data_image/book_images/dacnhantam2.jpg', false),
+(9, 'data_image/book_images/hanoi36.jpg', true),
+(9, 'data_image/book_images/hanoi361.jpg', false),
+(9, 'data_image/book_images/hanoi362.jpg', false),
+(10, 'data_image/book_images/hatphusakidieu.jpg', true),
+(10, 'data_image/book_images/hatphusakidieu1.jpg', false),
+(10, 'data_image/book_images/hatphusakidieu2.jpg', false),
+(11, 'data_image/book_images/tuban2.jpg', true),
+(11, 'data_image/book_images/tuban21.jpg', false),
+(11, 'data_image/book_images/tuban22.jpg', false),
+(12, 'data_image/book_images/HarryPotter2.jpg', true),
+(12, 'data_image/book_images/HarryPotter21.jpg', false),
+(12, 'data_image/book_images/HarryPotter22.jpg', false),
+(13, 'data_image/book_images/HarryPotter3.jpg', true),
+(13, 'data_image/book_images/HarryPotter31.jpg', false),
+(13, 'data_image/book_images/HarryPotter32.jpg', false),
+(14, 'data_image/book_images/HarryPotter4.jpg', true),
+(14, 'data_image/book_images/HarryPotter41.jpg', false),
+(14, 'data_image/book_images/HarryPotter42.jpg', false),
+(15, 'data_image/book_images/500dulieu.jpg', true),
+(15, 'data_image/book_images/500dulieu1.jpg', false),
+(16, 'data_image/book_images/tangcuongtrinho.jpg', true),
+(16, 'data_image/book_images/tangcuongtrinho1.jpg', false),
+(16, 'data_image/book_images/tangcuongtrinho2.jpg', false),
+(17, 'data_image/book_images/HarryPotter5.jpg', true),
+(17, 'data_image/book_images/HarryPotter51.jpg', false),
+(17, 'data_image/book_images/HarryPotter52.jpg', false),
+(18, 'data_image/book_images/HarryPotter6.jpg', true),
+(18, 'data_image/book_images/HarryPotter61.jpg', false),
+(18, 'data_image/book_images/HarryPotter62.jpg', false),
+(19, 'data_image/book_images/dehieunghethuat.jpg', true),
+(19, 'data_image/book_images/dehieunghethuat1.jpg', false),
+(19, 'data_image/book_images/dehieunghethuat2.jpg', false),
+(20, 'data_image/book_images/caycaosu.jpg', true),
+(20, 'data_image/book_images/caycaosu1.jpg', false),
+(20, 'data_image/book_images/caycaosu2.jpg', false)
+;
+
+INSERT INTO discount (book_id, discount_percent, start_date, end_date) 
+VALUES 
+(1,15.00,'2025-07-15','2025-09-30'),
+(2,15.00,'2025-07-15','2025-09-30'),
+(5,15.00,'2025-07-15','2025-09-30'),
+(3,20.00,'2025-07-15','2025-09-30');
